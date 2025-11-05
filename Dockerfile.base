@@ -1,0 +1,19 @@
+# Dockerfile.base
+FROM python:3.11-slim
+
+RUN pip install --no-cache-dir \
+    opentelemetry-distro==0.49b0 \
+    opentelemetry-exporter-otlp-proto-grpc==1.28.0 \
+    opentelemetry-instrumentation-fastapi==0.49b0 \
+    opentelemetry-instrumentation-requests==0.49b0
+
+RUN echo '#!/bin/sh\nexec python -m opentelemetry.instrument "$@"' > /usr/local/bin/opentelemetry.instrument \
+    && chmod +x /usr/local/bin/opentelemetry.instrument
+
+ENV OTEL_EXPORTER_OTLP_PROTOCOL=grpc \
+    OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317 \
+    OTEL_TRACES_EXPORTER=otlp \
+    OTEL_METRICS_EXPORTER=none \
+    OTEL_LOGS_EXPORTER=none
+
+WORKDIR /app
