@@ -1,5 +1,3 @@
-
-
 services:
   # Infrastructure Services
   postgres:
@@ -54,6 +52,17 @@ services:
     ports:
       - "2181:2181"
 
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./monitoring/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "14317:4317"
+      - "14318:4318"
+    depends_on:
+      - jaeger
+
   # Module A: Auth Service
   auth-service:
     build: ./auth-service
@@ -63,11 +72,14 @@ services:
       DATABASE_URL: postgresql://finflow:finflow123@postgres:5432/auth_db
       REDIS_HOST: redis
       SERVICE_PORT: 8001
+      OTEL_SERVICE_NAME: auth-service
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      otel-collector:
+        condition: service_started
 
   # Module B: Wallet Service
   wallet-service:
@@ -79,10 +91,12 @@ services:
       REDIS_HOST: redis
       AUTH_SERVICE_URL: http://auth-service:8001
       SERVICE_PORT: 8002
+      OTEL_SERVICE_NAME: wallet-service
     depends_on:
       - postgres
       - redis
       - auth-service
+      - otel-collector
 
   # Module C: Payment Service
   payment-service:
@@ -96,12 +110,14 @@ services:
       WALLET_SERVICE_URL: http://wallet-service:8002
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SERVICE_PORT: 8003
+      OTEL_SERVICE_NAME: payment-service
     depends_on:
       - postgres
       - redis
       - kafka
       - auth-service
       - wallet-service
+      - otel-collector
 
   # Module D: Notification Service
   notification-service:
@@ -115,12 +131,14 @@ services:
       PAYMENT_SERVICE_URL: http://payment-service:8003
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       SERVICE_PORT: 8004
+      OTEL_SERVICE_NAME: notification-service
     depends_on:
       - mongodb
       - redis
       - kafka
       - auth-service
       - payment-service
+      - otel-collector
 
   # Module E: KYC/AML Service
   kyc-service:
@@ -133,11 +151,13 @@ services:
       AUTH_SERVICE_URL: http://auth-service:8001
       PAYMENT_SERVICE_URL: http://payment-service:8003
       SERVICE_PORT: 8005
+      OTEL_SERVICE_NAME: kyc-aml-service
     depends_on:
       - postgres
       - redis
       - auth-service
       - payment-service
+      - otel-collector
 
   # Module F: Reporting Service
   reporting-service:
@@ -152,6 +172,7 @@ services:
       PAYMENT_SERVICE_URL: http://payment-service:8003
       KYC_SERVICE_URL: http://kyc-service:8005
       SERVICE_PORT: 8006
+      OTEL_SERVICE_NAME: reporting-analytics-service
     depends_on:
       - postgres
       - redis
@@ -159,6 +180,7 @@ services:
       - wallet-service
       - payment-service
       - kyc-service
+      - otel-collector
 
   # Monitoring
   prometheus:
@@ -182,6 +204,7 @@ services:
     ports:
       - "16686:16686"
       - "6831:6831/udp"
+      - "4317:4317"
 
 volumes:
   postgres_data:

@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM demo-fin-app/otel-base:latest
 
 WORKDIR /app
 
@@ -10,4 +10,4 @@ COPY .env .
 
 EXPOSE 8000
 
-CMD ["python", "main.py"]
+CMD ["opentelemetry-instrument", "python", "main.py"]
