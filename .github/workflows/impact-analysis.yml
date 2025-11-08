@@ -46,7 +46,7 @@ jobs:
           with open('/tmp/prep.json') as f:
               prep = json.load(f)
           
-          api_url = os.getenv("ANALYZER_API_URL", "http://localhost:8000")
+          api_url = os.getenv("ANALYZER_API_URL", "http://analyzer:8000")
           api_key = os.getenv("ANALYZER_API_KEY", "")
           
           headers = {"Content-Type": "application/json"}

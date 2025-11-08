@@ -32,7 +32,7 @@ jobs:
           import json
           import os
           
-          api_url = os.getenv("ANALYZER_API_URL", "http://localhost:8000")
+          api_url = os.getenv("ANALYZER_API_URL", "http://analyzer:8000")
           api_key = os.getenv("ANALYZER_API_KEY", "")
           threshold = float(os.getenv("RISK_THRESHOLD", "0.65"))
           
