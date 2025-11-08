@@ -1,0 +1,117 @@
+on:
+  pull_request:
+    types: [labeled]
+
+jobs:
+  full-impact:
+    if: contains(github.event.pull_request.labels.*.name, 'requires-impact-analysis')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install Dependencies
+        run: pip install requests pyyaml
+      
+      - name: Prepare Request
+        run: |
+          python - <<'EOF'
+          import json
+          import subprocess
+          
+          result = subprocess.run(
+              ['git', 'diff', '--name-only', 'origin/${{ github.base_ref }}...HEAD'],
+              capture_output=True, text=True
+          )
+          files = result.stdout.strip().split('\n')
+          service = files[0].split('/')[1] if files and '/' in files[0] else 'unknown'
+          
+          with open('/tmp/prep.json', 'w') as f:
+              json.dump({'service': service}, f)
+          EOF
+      
+      - name: Run Impact Analysis
+        run: |
+          python - <<'EOF'
+          import requests
+          import json
+          import os
+          
+          with open('/tmp/prep.json') as f:
+              prep = json.load(f)
+          
+          api_url = os.getenv("ANALYZER_API_URL", "http://localhost:8000")
+          api_key = os.getenv("ANALYZER_API_KEY", "")
+          
+          headers = {"Content-Type": "application/json"}
+          if api_key:
+              headers["Authorization"] = f"Bearer {api_key}"
+          
+          payload = {
+              "repo_url": "${{ github.server_url }}/${{ github.repository }}",
+              "service_name": prep['service'],
+              "changed_files": ["TBD"],
+              "diff_content": "test",
+              "base_branch": "${{ github.base_ref }}"
+          }
+          
+          try:
+              resp = requests.post(
+                  f"{api_url}/analyze/impact",
+                  json=payload,
+                  headers=headers,
+                  timeout=45
+              )
+              
+              if resp.status_code == 200:
+                  analysis = resp.json()
+                  with open('/tmp/impact.json', 'w') as f:
+                      json.dump(analysis, f)
+              else:
+                  print(f"Impact analysis failed: {resp.status_code}")
+          except Exception as e:
+              print(f"Error: {e}")
+          EOF
+      
+      - name: Post Impact Report
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            let report = '## 📊 Impact Analysis Report\n\n';
+            
+            if (fs.existsSync('/tmp/impact.json')) {
+              try {
+                const impact = JSON.parse(fs.readFileSync('/tmp/impact.json', 'utf8'));
+                report += `**Service:** ${impact.service}\n`;
+                report += `**Risk Score:** ${(impact.risk_score * 100).toFixed(0)}%\n`;
+                report += `**Effort:** ${impact.estimated_testing_effort}\n\n`;
+                
+                if (impact.business_impact_summary) {
+                  report += `**Impact:** ${impact.business_impact_summary}\n`;
+                }
+              } catch (e) {
+                report += 'Analysis available but parsing failed\n';
+              }
+            } else {
+              report += 'Impact analysis unavailable (local testing mode)\n';
+            }
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: report
+            });
+
+env:
+  ANALYZER_API_URL: ${{ secrets.ANALYZER_API_URL }}
+  ANALYZER_API_KEY: ${{ secrets.ANALYZER_API_KEY }}

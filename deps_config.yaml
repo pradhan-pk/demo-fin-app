@@ -1,0 +1,74 @@
+services:
+  auth:
+    name: "Auth Service"
+    direct_dependents: [wallet, kyc, notification]
+    depends_on: []
+    critical_fields:
+      - "account_tier"
+      - "user_permissions"
+    schema_version: "v1.0"
+    
+  wallet:
+    name: "Wallet Service"
+    direct_dependents: [payment, reporting]
+    depends_on: [auth]
+    critical_fields:
+      - "balance"
+      - "balance_precision"
+    schema_version: "v1.0"
+    
+  payment:
+    name: "Payment Service"
+    direct_dependents: [notification, reporting]
+    depends_on: [wallet, auth]
+    critical_fields:
+      - "transaction_status"
+      - "amount_precision"
+    schema_version: "v1.0"
+
+  notification:
+    name: "Notification Service"
+    direct_dependents: []
+    depends_on: [auth, payment]
+    critical_fields:
+      - "notification_template"
+      - "notification_status"
+    schema_version: "v1.0"
+
+  kyc:
+    name: "KYC/AML Service"
+    direct_dependents: [reporting]
+    depends_on: [auth, payment]
+    critical_fields:
+      - "kyc_status"
+      - "aml_status"
+    schema_version: "v1.0"
+
+  reporting:
+    name: "Reporting Service"
+    direct_dependents: []
+    depends_on: [wallet, payment, kyc]
+    critical_fields:
+      - "report_template"
+      - "aggregation_logic"
+    schema_version: "v1.0"
+
+risk_thresholds:
+  staging: 0.75
+  production: 0.50
+
+deployment_gates:
+  auto_approve: 0.30
+  manual_review: [0.30, 0.70]
+  auto_block: 0.70
+
+llm_config:
+  code_analyzer:
+    provider: "openrouter"
+    model: "deepseek/deepseek-coder:free"
+    timeout_seconds: 30
+    
+  impact_analyzer:
+    provider: "huggingface"
+    model: "mistralai/Mixtral-8x22B-Instruct-v0.1"
+    timeout_seconds: 45

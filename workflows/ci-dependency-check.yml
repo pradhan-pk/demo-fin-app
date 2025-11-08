@@ -1,0 +1,141 @@
+name: Dependency Validation Check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  ANALYZER_API_URL: ${{ secrets.ANALYZER_API_URL }}
+  ANALYZER_API_KEY: ${{ secrets.ANALYZER_API_KEY }}
+
+jobs:
+  extract-service:
+    runs-on: ubuntu-latest
+    outputs:
+      service_name: ${{ steps.identify.outputs.service }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Identify Changed Service
+        id: identify
+        run: |
+          FILES=$(git diff --name-only origin/${{ github.base_ref }} 2>/dev/null || echo "")
+          SERVICE=$(echo "$FILES" | cut -d'/' -f2 | head -1)
+          echo "service=$SERVICE" >> $GITHUB_OUTPUT
+          echo "Changed service: $SERVICE"
+
+  code-analysis:
+    needs: extract-service
+    runs-on: ubuntu-latest
+    if: ${{ needs.extract-service.outputs.service_name != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Install Dependencies
+        run: pip install requests pyyaml
+      
+      - name: Get Code Diff
+        run: |
+          git fetch origin ${{ github.base_ref }} 2>/dev/null || true
+          git diff origin/${{ github.base_ref }}...HEAD > /tmp/code.diff || true
+          echo "Diff size: $(wc -c < /tmp/code.diff)"
+      
+      - name: Call LLM Analyzer
+        run: |
+          python - <<'EOF'
+          import requests
+          import json
+          import os
+          
+          with open('/tmp/code.diff', 'r') as f:
+              diff_content = f.read()[:5000]
+          
+          if not diff_content.strip():
+              print("No diff content")
+              exit(0)
+          
+          payload = {
+              "repo_url": "${{ github.server_url }}/${{ github.repository }}",
+              "service_name": "${{ needs.extract-service.outputs.service_name }}",
+              "changed_files": ["TBD"],
+              "diff_content": diff_content,
+              "base_branch": "${{ github.base_ref }}"
+          }
+          
+          api_url = os.getenv("ANALYZER_API_URL", "http://localhost:8000")
+          api_key = os.getenv("ANALYZER_API_KEY", "")
+          
+          headers = {"Content-Type": "application/json"}
+          if api_key:
+              headers["Authorization"] = f"Bearer {api_key}"
+          
+          try:
+              resp = requests.post(
+                  f"{api_url}/analyze/code-dependencies",
+                  json=payload,
+                  headers=headers,
+                  timeout=30
+              )
+              
+              if resp.status_code == 200:
+                  analysis = resp.json()
+                  with open('/tmp/analysis.json', 'w') as f:
+                      json.dump(analysis, f)
+                  print(json.dumps(analysis, indent=2))
+              else:
+                  print(f"API Error: {resp.status_code}")
+                  print(resp.text)
+          except Exception as e:
+              print(f"Analysis failed: {e}")
+          EOF
+      
+      - name: Post Analysis Result
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            let comment = '## 🔍 Dependency Analysis\n\n';
+            
+            if (fs.existsSync('/tmp/analysis.json')) {
+              try {
+                const analysis = JSON.parse(fs.readFileSync('/tmp/analysis.json', 'utf8'));
+                
+                comment += `**Service:** ${analysis.service}\n`;
+                comment += `**Confidence:** ${(analysis.confidence_score * 100).toFixed(0)}%\n\n`;
+                
+                if (analysis.breaking_changes && analysis.breaking_changes.length > 0) {
+                  comment += '### Breaking Changes\n';
+                  analysis.breaking_changes.forEach(bc => {
+                    comment += `- **${bc.type}** (${bc.severity}): ${bc.description}\n`;
+                  });
+                } else {
+                  comment += '✅ No breaking changes detected\n';
+                }
+                
+                comment += `\n**Recommendation:** ${analysis.recommendation}\n`;
+              } catch (e) {
+                comment += '⚠️ Analysis available but could not parse\n';
+              }
+            } else {
+              comment += '⚠️ No analysis performed (API unreachable or local testing)\n';
+            }
+            
+            comment += '\n---\n*Add label `requires-impact-analysis` for full review*\n';
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
