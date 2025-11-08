@@ -10,7 +10,11 @@ env:
 
 jobs:
   extract-service:
+<<<<<<< Updated upstream
     runs-on: ubuntu-latest
+=======
+    runs-on: self-hosted
+>>>>>>> Stashed changes
     outputs:
       service_name: ${{ steps.identify.outputs.service }}
     steps:
@@ -28,7 +32,11 @@ jobs:
 
   code-analysis:
     needs: extract-service
+<<<<<<< Updated upstream
     runs-on: ubuntu-latest
+=======
+    runs-on: self-hosted
+>>>>>>> Stashed changes
     if: ${{ needs.extract-service.outputs.service_name != '' }}
     steps:
       - uses: actions/checkout@v4
