@@ -8,6 +8,8 @@ services:
       POSTGRES_DB: finflow
     ports:
       - "5432:5432"
+    networks:
+      - shared-network
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -21,6 +23,8 @@ services:
     image: mongo:6
     ports:
       - "27017:27017"
+    networks:
+      - shared-network
     volumes:
       - mongo_data:/data/db
 
@@ -28,6 +32,8 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    networks:
+      - shared-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -42,6 +48,8 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     ports:
       - "9092:9092"
+    networks:
+      - shared-network
     depends_on:
       - zookeeper
 
@@ -51,6 +59,8 @@ services:
       ZOOKEEPER_CLIENT_PORT: 2181
     ports:
       - "2181:2181"
+    networks:
+      - shared-network
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
@@ -60,6 +70,8 @@ services:
     ports:
       - "14317:4317"
       - "14318:4318"
+    networks:
+      - shared-network
     depends_on:
       - jaeger
 
@@ -68,6 +80,8 @@ services:
     build: ./auth-service
     ports:
       - "8001:8001"
+    networks:
+      - shared-network
     environment:
       DATABASE_URL: postgresql://finflow:finflow123@postgres:5432/auth_db
       REDIS_HOST: redis
@@ -86,6 +100,8 @@ services:
     build: ./wallet-service
     ports:
       - "8002:8002"
+    networks:
+      - shared-network
     environment:
       DATABASE_URL: postgresql://finflow:finflow123@postgres:5432/wallet_db
       REDIS_HOST: redis
@@ -103,6 +119,8 @@ services:
     build: ./payment-service
     ports:
       - "8003:8003"
+    networks:
+      - shared-network
     environment:
       DATABASE_URL: postgresql://finflow:finflow123@postgres:5432/payment_db
       REDIS_HOST: redis
@@ -124,6 +142,8 @@ services:
     build: ./notification-service
     ports:
       - "8004:8004"
+    networks:
+      - shared-network
     environment:
       DATABASE_URL: mongodb://mongodb:27017/notifications
       REDIS_HOST: redis
@@ -145,6 +165,8 @@ services:
     build: ./kyc-aml-service
     ports:
       - "8005:8005"
+    networks:
+      - shared-network
     environment:
       DATABASE_URL: postgresql://finflow:finflow123@postgres:5432/kyc_db
       REDIS_HOST: redis
@@ -164,6 +186,8 @@ services:
     build: ./reporting-analytics-service
     ports:
       - "8006:8006"
+    networks:
+      - shared-network
     environment:
       DATABASE_URL: postgresql://finflow:finflow123@postgres:5432/reporting_db
       REDIS_HOST: redis
@@ -187,6 +211,8 @@ services:
     image: prom/prometheus:latest
     ports:
       - "9090:9090"
+    networks:
+      - shared-network
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
 
@@ -194,6 +220,8 @@ services:
     image: grafana/grafana:latest
     ports:
       - "3000:3000"
+    networks:
+      - shared-network
     environment:
       GF_SECURITY_ADMIN_PASSWORD: admin
     depends_on:
@@ -205,6 +233,8 @@ services:
       - "16686:16686"
       - "6831:6831/udp"
       - "4317:4317"
+    networks:
+      - shared-network
 
 volumes:
   postgres_data:
@@ -213,3 +243,5 @@ volumes:
 networks:
   default:
     name: finflow-network
+  shared-network:
+    external: true
