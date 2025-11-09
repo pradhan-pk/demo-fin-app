@@ -80,7 +80,7 @@ jobs:
           
           try:
               resp = requests.post(
-                  f"{api_url}/analyze/code-dependencies",
+                  f"{api_url}/analyze/intelligent",
                   json=payload,
                   headers=headers,
                   timeout=30
