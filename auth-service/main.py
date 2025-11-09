@@ -35,6 +35,7 @@ redis_client = redis.Redis(
 )
 
 # Password hashing
+# Add Test Comment
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
