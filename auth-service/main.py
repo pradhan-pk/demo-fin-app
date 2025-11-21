@@ -51,7 +51,7 @@ class User(Base):
     phone = Column(String)
     role = Column(String, default="user")
     is_active = Column(Boolean, default=True)
-    kyc_status = Column(String, default="pending")  # New field that will cascade changes
+    kyc_verified = Column(Boolean, default=False)  # <-- "kyc_status" is REMOVED/RENAMED!
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
